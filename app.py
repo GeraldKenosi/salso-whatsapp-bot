@@ -59,17 +59,14 @@ def whatsapp_webhook():
         # Build TwiML response
         resp = MessagingResponse()
         for reply in replies:
-            resp.message(body=reply)
+            resp.message(reply)
 
         return str(resp)
 
     except Exception as e:
         app.logger.error(f"Webhook error: {e}", exc_info=True)
         resp = MessagingResponse()
-        try:
-            resp.message(body=f"Error: {str(e)[:200]}")
-        except:
-            resp.message(body="Sorry, something went wrong. Please try again later.")
+        resp.message(body="Sorry, something went wrong. Please try again later.")
         return str(resp)
 
 

@@ -25,19 +25,19 @@ def handle_message(wa_id, profile_name, message_text):
     text = message_text.strip().lower()
 
     if text in ["menu", "help", "options", "what can you do"]:
-        return [_show_menu()]
+        return _show_menu()
 
     if text in ["about", "info", "about salso", "about salo"]:
-        return [_about_salso()]
+        return _about_salso()
 
     if text in ["programmes", "programs", "work", "what we do", "our work"]:
-        return [_our_programmes()]
+        return _our_programmes()
 
     if text in ["faq", "faqs", "questions", "help"]:
-        return [_show_faqs()]
+        return _show_faqs()
 
     if text in ["contact", "email", "call", "reach us"]:
-        return [_contact_info()]
+        return _contact_info()
 
     if text in ["register", "my details", "profile", "update"]:
         _registration_steps[wa_id] = {"step": "name"}
@@ -51,7 +51,7 @@ def handle_message(wa_id, profile_name, message_text):
     if faq_reply:
         return [faq_reply]
 
-    return [_fallback()]
+    return _fallback()
 
 
 def _handle_greeting(wa_id, user, is_new):
@@ -164,16 +164,17 @@ def _show_faqs():
 
 
 def _show_menu():
-    lines = ["*MENU*\n"]
-    lines.append("Type any of these:\n")
-    lines.append("- about -- About SALSO\n")
-    lines.append("- programmes -- Our work & programmes\n")
-    lines.append("- faq -- FAQs\n")
-    lines.append("- contact -- Contact information\n")
-    lines.append("- register -- Set up / update your profile\n")
-    lines.append("- hi -- Start over\n")
-    lines.append("Or just ask me anything about SALSO!")
-    return ["".join(lines)]
+    return [
+        "MENU\n\n"
+        "Type any of these:\n\n"
+        "- about - About SALSO\n"
+        "- programmes - Our work & programmes\n"
+        "- faq - Frequently asked questions\n"
+        "- contact - Contact information\n"
+        "- register - Set up / update your profile\n"
+        "- hi - Start over\n\n"
+        "Or just ask me anything about SALSO!"
+    ]
 
 
 def _contact_info():
