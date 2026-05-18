@@ -103,7 +103,7 @@ def _handle_registration(wa_id, message_text, user):
         _registration_steps[wa_id]["step"] = "organisation"
         return [
             f"Great! Got it.\n\n"
-            f"Which *organisation* are you with (or are you an individual interested in SALO's work)?"
+            f"Which *organisation* are you with (or are you an individual interested in SALSO's work)?"
         ]
 
     if step == "organisation":
@@ -164,17 +164,16 @@ def _show_faqs():
 
 
 def _show_menu():
-    return [
-        "*📋 MENU*\n\n"
-        "Type any of these:\n\n"
-        "• *about* — About SALSO\n"
-        "• *programmes* — Our work & programmes\n"
-        "• *faq* — Frequently asked questions\n"
-        "• *contact* — Contact information\n"
-        "• *register* — Set up / update your profile\n"
-        "• *hi* — Start over\n\n"
-        "Or just ask me anything about SALSO!"
-    ]
+    lines = ["*MENU*\n"]
+    lines.append("Type any of these:\n")
+    lines.append("- about -- About SALSO\n")
+    lines.append("- programmes -- Our work & programmes\n")
+    lines.append("- faq -- FAQs\n")
+    lines.append("- contact -- Contact information\n")
+    lines.append("- register -- Set up / update your profile\n")
+    lines.append("- hi -- Start over\n")
+    lines.append("Or just ask me anything about SALSO!")
+    return ["".join(lines)]
 
 
 def _contact_info():
