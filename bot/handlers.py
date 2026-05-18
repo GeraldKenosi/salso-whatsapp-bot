@@ -27,10 +27,10 @@ def handle_message(wa_id, profile_name, message_text):
     if text in ["menu", "help", "options", "what can you do"]:
         return [_show_menu()]
 
-    if text in ["about", "info", "about salo", "about salso"]:
-        return [_about_salo()]
+    if text in ["about", "info", "about salso", "about salo"]:
+        return [_about_salso()]
 
-    if text in ["programmes", "work", "what we do", "our work"]:
+    if text in ["programmes", "programs", "work", "what we do", "our work"]:
         return [_our_programmes()]
 
     if text in ["faq", "faqs", "questions", "help"]:
@@ -63,11 +63,11 @@ def _handle_greeting(wa_id, user, is_new):
     elif registered:
         greeting = f"Welcome back, {name}! 👋\n\n"
     else:
-        greeting = f"Hello {name}! Welcome to SALO — the Southern African Liaison Office. 👋\n\n"
+        greeting = f"Hello {name}! Welcome to SALSO — The South African Learner Support Organisation. 👋\n\n"
 
     greeting += (
         "I can help you with:\n"
-        "• ℹ️  About SALO — type *about*\n"
+        "• ℹ️  About SALSO — type *about*\n"
         "• 📋 Our Programmes — type *programmes*\n"
         "• ❓ FAQs — type *faq*\n"
         "• 📞 Contact Us — type *contact*\n"
@@ -111,7 +111,7 @@ def _handle_registration(wa_id, message_text, user):
         _registration_steps[wa_id]["step"] = "role"
         return [
             f"Excellent! And finally, what best describes your *role*?\n\n"
-            f"Options: Student / Researcher / NGO Worker / Government / Media / Other"
+            f"Options: Student / Educator / Volunteer / NGO Worker / Partner / Other"
         ]
 
     if step == "role":
@@ -124,30 +124,31 @@ def _handle_registration(wa_id, message_text, user):
             f"• Email: {user.get('email')}\n"
             f"• Organisation: {user.get('organisation')}\n"
             f"• Role: {text}\n\n"
-            f"Type *menu* to see what I can help you with, or just ask me anything about SALO!"
+            f"Type *menu* to see what I can help you with, or just ask me anything about SALSO!"
         ]
 
     del _registration_steps[wa_id]
     return ["Something went wrong. Type *menu* to start over."]
 
 
-def _about_salo():
+def _about_salso():
     org = ORGANISATION
     text = (
         f"📍 *{org['name']}*\n"
         f"_{org['tagline']}_\n\n"
         f"{org['description']}\n\n"
         f"🌐 {org['website']}\n"
-        f"📧 {org['email']}\n\n"
+        f"📧 {org['email']} / {org['email2']}\n"
+        f"📞 {org['phone']} / {org['phone2']}\n\n"
         f"Type *programmes* to learn about our work, or *faq* for common questions."
     )
     return [text]
 
 
 def _our_programmes():
-    lines = ["📋 *SALO's Key Programmes:*\n"]
+    lines = ["📋 *SALSO Programmes:*\n"]
     for i, p in enumerate(PROGRAMMES, 1):
-        lines.append(f"{i}. *{p['title']}*")
+        lines.append(f"{i}. *{p['title']}* ({p['short']})")
         lines.append(f"   {p['description']}\n")
     lines.append("Type *about* for general info, or *faq* for common questions.")
     return ["\n".join(lines)]
@@ -166,23 +167,25 @@ def _show_menu():
     return [
         "*📋 MENU*\n\n"
         "Type any of these:\n\n"
-        "• *about* — About SALO\n"
+        "• *about* — About SALSO\n"
         "• *programmes* — Our work & programmes\n"
         "• *faq* — Frequently asked questions\n"
         "• *contact* — Contact information\n"
         "• *register* — Set up / update your profile\n"
         "• *hi* — Start over\n\n"
-        "Or just ask me anything about SALO!"
+        "Or just ask me anything about SALSO!"
     ]
 
 
 def _contact_info():
     return [
-        "📞 *Contact SALO*\n\n"
-        f"📧 Email: {ORGANISATION['email']}\n"
+        "📞 *Contact SALSO*\n\n"
+        f"📧 Email: {ORGANISATION['email']} / {ORGANISATION['email2']}\n"
+        f"📞 Phone: {ORGANISATION['phone']} / {ORGANISATION['phone2']}\n"
+        f"📍 Address: {ORGANISATION['address']}\n"
         f"🌐 Website: {ORGANISATION['website']}\n\n"
         "For general enquiries, feedback, or partnership opportunities, "
-        "email us and we'll get back to you."
+        "reach out and we'll get back to you!"
     ]
 
 
@@ -220,8 +223,8 @@ def _try_faq_match(text):
         return (
             "I'm not sure I have the answer to that. Try:\n"
             "• *faq* — See common questions\n"
-            "• *contact* — Reach SALO directly\n"
-            "• *about* — Learn about SALO"
+            "• *contact* — Reach SALSO directly\n"
+            "• *about* — Learn about SALSO"
         )
 
     return None
@@ -231,7 +234,7 @@ def _fallback():
     return [
         "I didn't quite understand that. 🤔\n\n"
         "Here's what I can help with:\n"
-        "• *about* — About SALO\n"
+        "• *about* — About SALSO\n"
         "• *programmes* — Our work\n"
         "• *faq* — FAQs\n"
         "• *contact* — Reach us\n"

@@ -1,6 +1,6 @@
 """
-SALSO WhatsApp Bot — Flask Web App
-=====================================
+SALSO WhatsApp Bot — The South African Learner Support Organisation
+====================================================================
 Receives incoming WhatsApp messages via Twilio webhook,
 processes them, and sends replies back.
 
