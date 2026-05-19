@@ -85,15 +85,27 @@ def _execute_action(wa_id, action, user):
 
 # ── Main handler ──────────────────────────────────────────────
 
+def _cancel_process(wa_id):
+    """Cancel any in-progress process for this user."""
+    if wa_id in _registration_steps:
+        del _registration_steps[wa_id]
+    _menu_states[wa_id] = "main"
+
+
 def handle_message(wa_id, profile_name, message_text):
     user, is_new = get_or_create_user(wa_id, profile_name)
+
+    text = message_text.strip()
+    text_lower = text.lower()
+
+    # Global escape: "menu" always goes to main menu, cancels anything in progress
+    if text_lower in ["menu", "help", "options", "what can you do", "main menu", "home"]:
+        _cancel_process(wa_id)
+        return [_format_menu("main")]
 
     # Mid-registration -> continue
     if wa_id in _registration_steps:
         return _handle_registration(wa_id, message_text, user)
-
-    text = message_text.strip()
-    text_lower = text.lower()
 
     # Greeting
     greeting_pattern = r"^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|greetings|yo|h[o]+la)[\s!.]*$"
@@ -105,10 +117,7 @@ def handle_message(wa_id, profile_name, message_text):
     new_menu = None
 
     # Explicit command routing (still supported for power users)
-    if text_lower in ["menu", "help", "options", "what can you do", "main menu", "home"]:
-        replies, new_menu = [_format_menu("main")], "main"
-
-    elif text_lower in ["about", "info", "about salso", "about salo"]:
+    if text_lower in ["about", "info", "about salso", "about salo"]:
         replies = _about_salso() + ["", "Reply *0* for Main Menu."]
         new_menu = "main"
 
