@@ -179,15 +179,13 @@ def _handle_greeting(wa_id, user, is_new):
 
     if not registered:
         lines.append(
-            "---\n"
-            "Also, could you please tell me your *full name* so I can remember you?"
+            "Tip: Select option 5 to register so I can remember you next time!"
         )
-        _registration_steps[wa_id] = {"step": "name"}
 
     return lines
 
 
-# ── Registration ──────────────────────────────────────────────
+# ── Registration (asks name + email once, saves permanently) ──
 
 def _handle_registration(wa_id, message_text, user):
     step_data = _registration_steps[wa_id]
@@ -202,32 +200,14 @@ def _handle_registration(wa_id, message_text, user):
     if step == "email":
         if "@" not in text or "." not in text:
             return ["That doesn't look like a valid email. Please enter a valid email address (e.g. name@example.com)."]
-        update_user(wa_id, email=text)
-        _registration_steps[wa_id]["step"] = "organisation"
-        return [
-            f"Great! Got it.\n\n"
-            f"Which *organisation* are you with (or are you an individual interested in SALSO's work)?"
-        ]
-
-    if step == "organisation":
-        update_user(wa_id, organisation=text, registered=True)
-        _registration_steps[wa_id]["step"] = "role"
-        return [
-            f"Excellent! And finally, what best describes your *role*?\n\n"
-            f"Options: Student / Educator / Volunteer / NGO Worker / Partner / Other"
-        ]
-
-    if step == "role":
-        update_user(wa_id, role=text)
+        update_user(wa_id, email=text, registered=True)
         del _registration_steps[wa_id]
         _menu_states[wa_id] = "main"
         return [
             f"All set, {user.get('name', 'friend')}!\n\n"
-            f"What I have saved:\n"
+            f"I'll remember you as:\n"
             f"  Name: {user.get('name')}\n"
-            f"  Email: {user.get('email')}\n"
-            f"  Organisation: {user.get('organisation')}\n"
-            f"  Role: {text}\n\n"
+            f"  Email: {text}\n\n"
             f"Reply with a number from the menu below, or just ask me anything!"
         ] + [_format_menu("main")]
 
