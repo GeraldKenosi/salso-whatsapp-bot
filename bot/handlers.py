@@ -51,11 +51,11 @@ def _execute_action(wa_id, action, user):
     """Run a menu action and return (replies, new_menu)."""
     # --- direct content actions ---
     if action == "show_about":
-        return _about_salso(), None
+        return _about_salso(), "main"
     if action == "show_contact":
-        return _contact_info(), None
+        return _contact_info(), "main"
     if action == "show_partners":
-        return _partners_info(), None
+        return _partners_info(), "main"
     if action == "register":
         _registration_steps[wa_id] = {"step": "name"}
         return ["Let's set up your profile.\n\nWhat is your full name?"], None
@@ -110,7 +110,7 @@ def handle_message(wa_id, profile_name, message_text):
 
     elif text_lower in ["about", "info", "about salso", "about salo"]:
         replies = _about_salso() + ["", "Reply *0* for Main Menu."]
-        new_menu = None
+        new_menu = "main"
 
     elif text_lower in ["programmes", "programs", "work", "what we do", "our work"]:
         replies, new_menu = [_format_menu("programmes")], "programmes"
@@ -120,7 +120,7 @@ def handle_message(wa_id, profile_name, message_text):
 
     elif text_lower in ["contact", "email", "call", "reach us"]:
         replies = _contact_info() + ["", "Reply *0* for Main Menu."]
-        new_menu = None
+        new_menu = "main"
 
     elif text_lower in ["register", "my details", "profile", "update"]:
         _registration_steps[wa_id] = {"step": "name"}
@@ -128,7 +128,7 @@ def handle_message(wa_id, profile_name, message_text):
 
     elif text_lower in ["partners", "schools"]:
         replies = _partners_info() + ["", "Reply *0* for Main Menu."]
-        new_menu = None
+        new_menu = "main"
 
     elif text in ("0", "back", "exit", "go back"):
         replies, new_menu = [_format_menu("main")], "main"
