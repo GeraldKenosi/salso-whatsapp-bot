@@ -2,89 +2,192 @@ import re
 from .knowledge_base import ORGANISATION, PROGRAMMES, FAQS, FAQ_KEYWORDS
 from .session import get_or_create_user, update_user, is_registered
 
-# Track registration step for users who haven't completed it
 _registration_steps = {}
+_menu_states = {}  # wa_id -> current menu name or None
 
+
+# ── Menu definitions ──────────────────────────────────────────
+
+MENUS = {
+    "main": {
+        "title": "MAIN MENU",
+        "options": [
+            ("About SALSO", "show_about"),
+            ("Our Programmes", "menu:programmes"),
+            ("FAQs", "menu:faq"),
+            ("Contact Us", "show_contact"),
+            ("Register / My Profile", "register"),
+            ("Partners & Schools", "show_partners"),
+        ],
+    },
+    "programmes": {
+        "title": "PROGRAMMES",
+        "options": [
+            (p["title"], f"show_programme:{i}")
+            for i, p in enumerate(PROGRAMMES)
+        ] + [("Back to Main Menu", "menu:main")],
+    },
+    "faq": {
+        "title": "FAQ TOPICS",
+        "options": [
+            (faq["question"][:60], f"show_faq:{i}")
+            for i, faq in enumerate(FAQS)
+        ] + [("Back to Main Menu", "menu:main")],
+    },
+}
+
+
+def _format_menu(menu_name):
+    """Build a menu string from its definition."""
+    menu = MENUS[menu_name]
+    lines = [f"*{menu['title']}*\n"]
+    for i, (label, _) in enumerate(menu["options"], 1):
+        lines.append(f"{i}. {label}")
+    lines.append("\nReply with a number, or type your question freely.")
+    return "\n".join(lines)
+
+
+def _execute_action(wa_id, action, user):
+    """Run a menu action and return (replies, new_menu)."""
+    # --- direct content actions ---
+    if action == "show_about":
+        return _about_salso(), None
+    if action == "show_contact":
+        return _contact_info(), None
+    if action == "show_partners":
+        return _partners_info(), None
+    if action == "register":
+        _registration_steps[wa_id] = {"step": "name"}
+        return ["Let's set up your profile.\n\nWhat is your full name?"], None
+    if action.startswith("show_programme:"):
+        idx = int(action.split(":", 1)[1])
+        p = PROGRAMMES[idx]
+        text = (
+            f"*{p['title']}* ({p['short']})\n\n"
+            f"{p['description']}\n\n"
+            f"Reply *0* to go back to Programmes."
+        )
+        return [text], "programmes"
+    if action.startswith("show_faq:"):
+        idx = int(action.split(":", 1)[1])
+        faq = FAQS[idx]
+        text = f"*Q:* {faq['question']}\n\n*A:* {faq['answer']}"
+        return [text], "faq"
+
+    # --- menu navigation actions ---
+    if action.startswith("menu:"):
+        target = action.split(":", 1)[1]
+        return [_format_menu(target)], target
+
+    # fallback
+    return [_format_menu("main")], "main"
+
+
+# ── Main handler ──────────────────────────────────────────────
 
 def handle_message(wa_id, profile_name, message_text):
-    """Main message handler. Returns a list of reply strings."""
-
-    # Get or create user
     user, is_new = get_or_create_user(wa_id, profile_name)
 
-    # If user is mid-registration, continue that flow
+    # Mid-registration -> continue
     if wa_id in _registration_steps:
         return _handle_registration(wa_id, message_text, user)
 
-    # Check if user is saying hello / hi
+    text = message_text.strip()
+    text_lower = text.lower()
+
+    # Greeting
     greeting_pattern = r"^(hi|hello|hey|howdy|good\s*(morning|afternoon|evening)|greetings|yo|h[o]+la)[\s!.]*$"
-    if re.match(greeting_pattern, message_text.strip().lower()):
+    if re.match(greeting_pattern, text_lower):
         return _handle_greeting(wa_id, user, is_new)
 
-    # Command routing
-    text = message_text.strip().lower()
+    # --- Determine response and menu state ---
+    replies = None
+    new_menu = None
 
-    if text in ["menu", "help", "options", "what can you do"]:
-        return _show_menu()
+    # Explicit command routing (still supported for power users)
+    if text_lower in ["menu", "help", "options", "what can you do", "main menu", "home"]:
+        replies, new_menu = [_format_menu("main")], "main"
 
-    if text in ["about", "info", "about salso", "about salo"]:
-        return _about_salso()
+    elif text_lower in ["about", "info", "about salso", "about salo"]:
+        replies = _about_salso() + ["", "Reply *0* for Main Menu."]
+        new_menu = None
 
-    if text in ["programmes", "programs", "work", "what we do", "our work"]:
-        return _our_programmes()
+    elif text_lower in ["programmes", "programs", "work", "what we do", "our work"]:
+        replies, new_menu = [_format_menu("programmes")], "programmes"
 
-    if text in ["faq", "faqs", "questions", "help"]:
-        return _show_faqs()
+    elif text_lower in ["faq", "faqs", "questions"]:
+        replies, new_menu = [_format_menu("faq")], "faq"
 
-    if text in ["contact", "email", "call", "reach us"]:
-        return _contact_info()
+    elif text_lower in ["contact", "email", "call", "reach us"]:
+        replies = _contact_info() + ["", "Reply *0* for Main Menu."]
+        new_menu = None
 
-    if text in ["register", "my details", "profile", "update"]:
+    elif text_lower in ["register", "my details", "profile", "update"]:
         _registration_steps[wa_id] = {"step": "name"}
-        return [
-            "Let's set up your profile.\n\n"
-            "What is your full name?"
-        ]
+        return ["Let's set up your profile.\n\nWhat is your full name?"]
 
-    # Try to match FAQ by keyword
-    faq_reply = _try_faq_match(text)
-    if faq_reply:
-        return [faq_reply]
+    elif text_lower in ["partners", "schools"]:
+        replies = _partners_info() + ["", "Reply *0* for Main Menu."]
+        new_menu = None
 
-    return _fallback()
+    elif text in ("0", "back", "exit", "go back"):
+        replies, new_menu = [_format_menu("main")], "main"
 
+    else:
+        # Try number -> menu action or FAQ
+        num_match = re.match(r"^(\d+)$", text)
+        if num_match:
+            num = int(num_match.group(1))
+            current = _menu_states.get(wa_id)
+            if current and current in MENUS:
+                menu = MENUS[current]
+                if 1 <= num <= len(menu["options"]):
+                    _, action = menu["options"][num - 1]
+                    replies, new_menu = _execute_action(wa_id, action, user)
+            if replies is None and 1 <= num <= len(FAQS):
+                faq = FAQS[num - 1]
+                replies = [f"*Q:* {faq['question']}\n\n*A:* {faq['answer']}\n\n---\nReply *0* for Main Menu."]
+                new_menu = None
+
+        if replies is None:
+            faq_reply = _try_faq_match(text_lower)
+            if faq_reply:
+                replies = [faq_reply]
+
+    if replies is None:
+        replies = _fallback()
+
+    _menu_states[wa_id] = new_menu
+    return replies
+
+
+# ── Greeting ──────────────────────────────────────────────────
 
 def _handle_greeting(wa_id, user, is_new):
     name = user.get("profile_name", "there")
     registered = is_registered(wa_id)
 
     if registered and user.get("name"):
-        greeting = f"Welcome back, {user['name']}! 👋\n\n"
+        lines = [f"Welcome back, {user['name']}! 👋\n"]
     elif registered:
-        greeting = f"Welcome back, {name}! 👋\n\n"
+        lines = [f"Welcome back, {name}! 👋\n"]
     else:
-        greeting = f"Hello {name}! Welcome to SALSO — The South African Learner Support Organisation. 👋\n\n"
+        lines = [f"Hello {name}! Welcome to SALSO — The South African Learner Support Organisation. 👋\n"]
 
-    greeting += (
-        "I can help you with:\n"
-        "• ℹ️  About SALSO — type *about*\n"
-        "• 📋 Our Programmes — type *programmes*\n"
-        "• ❓ FAQs — type *faq*\n"
-        "• 📞 Contact Us — type *contact*\n"
-        "• 📝 Register / My Profile — type *register*\n"
-        "• 🆘 Menu — type *menu*\n\n"
-        "What would you like to know?"
-    )
+    lines.append(_format_menu("main"))
+    _menu_states[wa_id] = "main"
 
     if not registered:
-        _registration_steps[wa_id] = {"step": "name"}
-        greeting += (
-            "\n\n---\n"
+        lines.append(
+            "---\n"
             "Also, could you please tell me your *full name* so I can remember you?"
         )
+        _registration_steps[wa_id] = {"step": "name"}
 
-    return [greeting]
+    return lines
 
+
+# ── Registration ──────────────────────────────────────────────
 
 def _handle_registration(wa_id, message_text, user):
     step_data = _registration_steps[wa_id]
@@ -117,89 +220,66 @@ def _handle_registration(wa_id, message_text, user):
     if step == "role":
         update_user(wa_id, role=text)
         del _registration_steps[wa_id]
+        _menu_states[wa_id] = "main"
         return [
-            f"✅ You're all set, {user.get('name', 'friend')}!\n\n"
-            f"Here's what I have saved:\n"
-            f"• Name: {user.get('name')}\n"
-            f"• Email: {user.get('email')}\n"
-            f"• Organisation: {user.get('organisation')}\n"
-            f"• Role: {text}\n\n"
-            f"Type *menu* to see what I can help you with, or just ask me anything about SALSO!"
-        ]
+            f"All set, {user.get('name', 'friend')}!\n\n"
+            f"What I have saved:\n"
+            f"  Name: {user.get('name')}\n"
+            f"  Email: {user.get('email')}\n"
+            f"  Organisation: {user.get('organisation')}\n"
+            f"  Role: {text}\n\n"
+            f"Reply with a number from the menu below, or just ask me anything!"
+        ] + [_format_menu("main")]
 
     del _registration_steps[wa_id]
-    return ["Something went wrong. Type *menu* to start over."]
+    _menu_states[wa_id] = "main"
+    return [_format_menu("main")]
 
+
+# ── Content functions ─────────────────────────────────────────
 
 def _about_salso():
     org = ORGANISATION
-    text = (
-        f"📍 *{org['name']}*\n"
+    return [
+        f"*{org['name']}*\n"
         f"_{org['tagline']}_\n\n"
         f"{org['description']}\n\n"
-        f"🌐 {org['website']}\n"
-        f"📧 {org['email']} / {org['email2']}\n"
-        f"📞 {org['phone']} / {org['phone2']}\n\n"
-        f"Type *programmes* to learn about our work, or *faq* for common questions."
-    )
-    return [text]
-
-
-def _our_programmes():
-    lines = ["📋 *SALSO Programmes:*\n"]
-    for i, p in enumerate(PROGRAMMES, 1):
-        lines.append(f"{i}. *{p['title']}* ({p['short']})")
-        lines.append(f"   {p['description']}\n")
-    lines.append("Type *about* for general info, or *faq* for common questions.")
-    return ["\n".join(lines)]
-
-
-def _show_faqs():
-    lines = ["❓ *Frequently Asked Questions:*\n"]
-    for i, faq in enumerate(FAQS, 1):
-        lines.append(f"{i}. {faq['question']}")
-    lines.append("\nReply with a number (1-{}) to see the answer.".format(len(FAQS)))
-    lines.append("Or just type your question freely!")
-    return ["\n".join(lines)]
-
-
-def _show_menu():
-    return [
-        "MENU\n\n"
-        "Type any of these:\n\n"
-        "- about - About SALSO\n"
-        "- programmes - Our work & programmes\n"
-        "- faq - Frequently asked questions\n"
-        "- contact - Contact information\n"
-        "- register - Set up / update your profile\n"
-        "- hi - Start over\n\n"
-        "Or just ask me anything about SALSO!"
+        f"Website: {org['website']}\n"
+        f"Email: {org['email']} / {org['email2']}\n"
+        f"Phone: {org['phone']} / {org['phone2']}\n"
+        f"Address: {org['address']}\n\n"
+        f"Reply *0* for Main Menu."
     ]
 
 
 def _contact_info():
+    org = ORGANISATION
     return [
-        "📞 *Contact SALSO*\n\n"
-        f"📧 Email: {ORGANISATION['email']} / {ORGANISATION['email2']}\n"
-        f"📞 Phone: {ORGANISATION['phone']} / {ORGANISATION['phone2']}\n"
-        f"📍 Address: {ORGANISATION['address']}\n"
-        f"🌐 Website: {ORGANISATION['website']}\n\n"
-        "For general enquiries, feedback, or partnership opportunities, "
-        "reach out and we'll get back to you!"
+        f"*Contact SALSO*\n\n"
+        f"Email: {org['email']} / {org['email2']}\n"
+        f"Phone: {org['phone']} / {org['phone2']}\n"
+        f"Address: {org['address']}\n"
+        f"Website: {org['website']}\n\n"
+        f"Reply *0* for Main Menu."
     ]
 
 
-def _try_faq_match(text):
-    """Try to find a matching FAQ based on keywords in the user's message."""
-    # Check if user typed a number (FAQ index)
-    num_match = re.match(r"^(\d+)$", text.strip())
-    if num_match:
-        idx = int(num_match.group(1)) - 1
-        if 0 <= idx < len(FAQS):
-            faq = FAQS[idx]
-            return f"*Q:* {faq['question']}\n\n*A:* {faq['answer']}"
+def _partners_info():
+    from .knowledge_base import PARTNERS, COLLABORATING_SCHOOLS
+    lines = ["*Partners & Schools*\n"]
+    lines.append("Partners:")
+    for p in PARTNERS:
+        lines.append(f"  - {p['name']} ({p['role']})")
+    lines.append("\nCollaborating Schools:")
+    for s in COLLABORATING_SCHOOLS:
+        lines.append(f"  - {s}")
+    lines.append("\nReply *0* for Main Menu.")
+    return ["\n".join(lines)]
 
-    # Keyword matching
+
+# ── FAQ matching ──────────────────────────────────────────────
+
+def _try_faq_match(text):
     words = set(re.findall(r"[a-z]+", text.lower()))
     best_idx = None
     best_score = 0
@@ -207,7 +287,6 @@ def _try_faq_match(text):
     for word in words:
         if word in FAQ_KEYWORDS:
             for idx in FAQ_KEYWORDS[word]:
-                # Count how many of the user's words match this FAQ's question
                 q_words = set(re.findall(r"[a-z]+", FAQS[idx]["question"].lower()))
                 overlap = len(words & q_words)
                 if overlap > best_score:
@@ -216,15 +295,13 @@ def _try_faq_match(text):
 
     if best_idx is not None and best_score >= 1:
         faq = FAQS[best_idx]
-        return f"*Q:* {faq['question']}\n\n*A:* {faq['answer']}\n\n---\nType *faq* for more questions."
+        return f"*Q:* {faq['question']}\n\n*A:* {faq['answer']}\n\n---\nReply *0* for Main Menu."
 
-    # If user asked a question-like thing but we couldn't match
     if "?" in text:
         return (
             "I'm not sure I have the answer to that. Try:\n"
-            "• *faq* — See common questions\n"
-            "• *contact* — Reach SALSO directly\n"
-            "• *about* — Learn about SALSO"
+            "- *faq* to see common questions\n"
+            "- *contact* to reach SALSO directly"
         )
 
     return None
@@ -232,13 +309,10 @@ def _try_faq_match(text):
 
 def _fallback():
     return [
-        "I didn't quite understand that. 🤔\n\n"
-        "Here's what I can help with:\n"
-        "• *about* — About SALSO\n"
-        "• *programmes* — Our work\n"
-        "• *faq* — FAQs\n"
-        "• *contact* — Reach us\n"
-        "• *register* — Set up your profile\n"
-        "• *menu* — Show all options\n\n"
-        "Or just type *hi* to start over!"
+        "I didn't quite understand that.\n\n"
+        "Here's what I can do:\n"
+        "- Type a number from the menu\n"
+        "- Type *about*, *programmes*, *faq*, *contact*, *partners*\n"
+        "- Type *menu* to see all options\n"
+        "- Type *hi* to start over"
     ]
